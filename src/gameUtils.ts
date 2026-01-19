@@ -40,22 +40,40 @@ export const PYRAMID_LAYOUT: CardPosition[] = [
   { row: 3, col: 15 },
 ];
 
-// Initialize a new game
+// Initialize a new game with random cards
 export const initializeGame = (): { pyramid: Card[]; stock: Card[] } => {
+  // Create a full deck
+  const suits: Array<'hearts' | 'diamonds' | 'clubs' | 'spades'> = ['hearts', 'diamonds', 'clubs', 'spades'];
+  const ranks: Rank[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+  
+  const deck: Array<{ suit: Suit; rank: Rank }> = [];
+  suits.forEach(suit => {
+    ranks.forEach(rank => {
+      deck.push({ suit, rank });
+    });
+  });
+  
+  // Shuffle the deck using Fisher-Yates algorithm
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  
+  // Deal cards to pyramid (28 cards)
   const pyramid: Card[] = PYRAMID_LAYOUT.map((pos, index) => ({
     id: `pyramid-${index}`,
-    suit: null,
-    rank: null,
+    suit: deck[index].suit,
+    rank: deck[index].rank,
     position: pos,
     removed: false,
     blocked: true,
   }));
 
-  // 24 cards in stock (52 - 28 = 24)
-  const stock: Card[] = Array.from({ length: 24 }, (_, index) => ({
+  // Deal remaining cards to stock (24 cards)
+  const stock: Card[] = deck.slice(28).map((cardData, index) => ({
     id: `stock-${index}`,
-    suit: null,
-    rank: null,
+    suit: cardData.suit,
+    rank: cardData.rank,
     position: { row: -1, col: -1 },
     removed: false,
     blocked: false,

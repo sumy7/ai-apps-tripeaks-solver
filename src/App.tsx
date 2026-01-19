@@ -1,10 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { Card, Suit, Rank, HistoryStep } from './types';
+import { Card, HistoryStep } from './types';
 import {
   initializeGame,
   cloneCards,
   exportGameState,
   importGameState,
+  canPlayCard,
+  updateBlockedStatus,
+  getRankDisplay,
 } from './gameUtils';
 import { solveGame } from './solver';
 import Board from './components/Board';
@@ -18,11 +21,13 @@ function App() {
   const [history, setHistory] = useState<HistoryStep[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [message, setMessage] = useState<string>('');
+  const [isPlaying, setIsPlaying] = useState(true); // true = playing mode, false = viewing solution
 
-  // Store original labels for reset functionality
-  const [originalLabels, setOriginalLabels] = useState<
-    Map<string, { suit: Suit; rank: Rank }>
-  >(new Map());
+  // Store original game state for reset functionality
+  const [initialGameState, setInitialGameState] = useState<{
+    pyramid: Card[];
+    stock: Card[];
+  } | null>(null);
 
   // Initialize game on mount
   React.useEffect(() => {
@@ -36,40 +41,95 @@ function App() {
     setWaste(null);
     setHistory([]);
     setCurrentStepIndex(-1);
-    setOriginalLabels(new Map());
-    setMessage('新游戏开始！右键点击卡牌标注花色和点数');
+    setInitialGameState({ pyramid: cloneCards(newPyramid), stock: [...newStock] });
+    setIsPlaying(true);
+    setMessage('新游戏开始！点击卡牌移动到弃牌堆，或点击库存翻牌');
   }, []);
 
-  const handleCardLabelChange = useCallback(
-    (cardId: string, suit: Suit, rank: Rank) => {
-      // Update the card label
-      setPyramid((prev) =>
-        prev.map((card) =>
-          card.id === cardId ? { ...card, suit, rank } : card
-        )
-      );
+  const handleCardClick = useCallback(
+    (cardId: string) => {
+      if (!isPlaying) {
+        setMessage('当前正在查看求解步骤，无法手动移动卡牌');
+        return;
+      }
 
-      setStock((prev) =>
-        prev.map((card) =>
-          card.id === cardId ? { ...card, suit, rank } : card
-        )
-      );
+      // Find the card in pyramid
+      const cardIndex = pyramid.findIndex((c) => c.id === cardId);
+      if (cardIndex === -1) return;
 
-      // Store the label for reset
-      setOriginalLabels((prev) => {
-        const newMap = new Map(prev);
-        if (suit === null && rank === null) {
-          newMap.delete(cardId);
-        } else {
-          newMap.set(cardId, { suit, rank });
-        }
-        return newMap;
-      });
+      const card = pyramid[cardIndex];
 
+      // Check if card is playable (not removed and not blocked)
+      if (card.removed || card.blocked) {
+        setMessage('该卡牌被其他卡牌覆盖，无法移动');
+        return;
+      }
+
+      // Check if card can be played on waste
+      if (!waste) {
+        setMessage('请先从库存翻出一张卡牌');
+        return;
+      }
+
+      if (!canPlayCard(card, waste)) {
+        setMessage(`无法移动：${getRankDisplay(card.rank)} 与 ${getRankDisplay(waste.rank)} 不相邻`);
+        return;
+      }
+
+      // Play the card
+      const newPyramid = [...pyramid];
+      newPyramid[cardIndex] = { ...card, removed: true };
+      updateBlockedStatus(newPyramid);
+
+      setPyramid(newPyramid);
+      setWaste({ ...card });
       setMessage('');
+
+      // Check if game is won
+      const remainingCards = newPyramid.filter((c) => !c.removed);
+      if (remainingCards.length === 0) {
+        setMessage('🎉 恭喜！你赢了！所有卡牌已移除');
+        setIsPlaying(false);
+      }
     },
-    []
+    [pyramid, waste, isPlaying]
   );
+
+  const handleStockClick = useCallback(() => {
+    if (!isPlaying) {
+      setMessage('当前正在查看求解步骤，无法翻牌');
+      return;
+    }
+
+    if (stock.length === 0) {
+      setMessage('库存已空');
+      return;
+    }
+
+    const drawnCard = stock[0];
+    setStock(stock.slice(1));
+    setWaste({ ...drawnCard });
+    setMessage('');
+
+    // Check if game is lost
+    const playableCards = pyramid.filter((c) => !c.removed && !c.blocked);
+    const canPlay = playableCards.some((c) => canPlayCard(c, drawnCard));
+    
+    if (!canPlay && stock.length === 1) {
+      // Check if this was the last card
+      setTimeout(() => {
+        const stillPlayable = pyramid.filter((c) => !c.removed && !c.blocked);
+        const stillCanPlay = stillPlayable.some((c) => canPlayCard(c, drawnCard));
+        if (!stillCanPlay && stock.length === 0) {
+          const remaining = pyramid.filter((c) => !c.removed);
+          if (remaining.length > 0) {
+            setMessage(`😞 游戏失败，剩余 ${remaining.length} 张卡牌`);
+            setIsPlaying(false);
+          }
+        }
+      }, 100);
+    }
+  }, [stock, pyramid, isPlaying]);
 
   const handleSolve = useCallback(() => {
     setMessage('开始求解...');
@@ -77,6 +137,7 @@ function App() {
 
     setHistory(result.history);
     setCurrentStepIndex(result.history.length - 1);
+    setIsPlaying(false);
 
     if (result.success) {
       setMessage('✓ 求解成功！所有金字塔卡牌已移除');
@@ -96,27 +157,43 @@ function App() {
   }, [pyramid, stock, waste]);
 
   const handleReset = useCallback(() => {
-    // Reset board to initial positions but keep labels
-    const { pyramid: newPyramid, stock: newStock } = initializeGame();
+    if (!initialGameState) return;
 
-    // Reapply the labels
-    const pyramidWithLabels = newPyramid.map((card) => {
-      const label = originalLabels.get(card.id);
-      return label ? { ...card, suit: label.suit, rank: label.rank } : card;
-    });
-
-    const stockWithLabels = newStock.map((card) => {
-      const label = originalLabels.get(card.id);
-      return label ? { ...card, suit: label.suit, rank: label.rank } : card;
-    });
-
-    setPyramid(pyramidWithLabels);
-    setStock(stockWithLabels);
+    // Reset to initial game state
+    setPyramid(cloneCards(initialGameState.pyramid));
+    setStock([...initialGameState.stock]);
     setWaste(null);
     setHistory([]);
     setCurrentStepIndex(-1);
-    setMessage('棋盘已重置，标注信息保留');
-  }, [originalLabels]);
+    setIsPlaying(true);
+    setMessage('游戏已重置到初始状态');
+  }, [initialGameState]);
+
+  const handleContinueSolve = useCallback(() => {
+    // Continue solving from current state
+    setMessage('从当前状态继续求解...');
+    const result = solveGame(pyramid, stock, waste);
+
+    setHistory(result.history);
+    setCurrentStepIndex(result.history.length - 1);
+    setIsPlaying(false);
+
+    if (result.success) {
+      setMessage('✓ 求解成功！所有金字塔卡牌已移除');
+    } else {
+      setMessage(`✗ ${result.reason || '求解失败'}`);
+    }
+
+    // Apply the final state
+    if (result.history.length > 0) {
+      const finalStep = result.history[result.history.length - 1];
+      setPyramid(cloneCards(finalStep.gameState.pyramid));
+      setStock([...finalStep.gameState.stock]);
+      setWaste(
+        finalStep.gameState.waste ? { ...finalStep.gameState.waste } : null
+      );
+    }
+  }, [pyramid, stock, waste]);
 
   const handleExport = useCallback(() => {
     const exportData = exportGameState(pyramid, stock);
@@ -140,16 +217,8 @@ function App() {
       setWaste(null);
       setHistory([]);
       setCurrentStepIndex(-1);
-
-      // Update original labels
-      const newLabels = new Map<string, { suit: Suit; rank: Rank }>();
-      [...imported.pyramid, ...imported.stock].forEach((card) => {
-        if (card.suit !== null && card.rank !== null) {
-          newLabels.set(card.id, { suit: card.suit, rank: card.rank });
-        }
-      });
-      setOriginalLabels(newLabels);
-
+      setInitialGameState({ pyramid: cloneCards(imported.pyramid), stock: [...imported.stock] });
+      setIsPlaying(true);
       setMessage('游戏状态已导入');
     } else {
       setMessage('✗ 导入失败，请检查文件格式');
@@ -164,28 +233,34 @@ function App() {
         setStock([...step.gameState.stock]);
         setWaste(step.gameState.waste ? { ...step.gameState.waste } : null);
         setCurrentStepIndex(index);
+        setIsPlaying(false);
         setMessage(`查看步骤 ${index}: ${step.description}`);
       }
     },
     [history]
   );
 
+  const handleResume = useCallback(() => {
+    setIsPlaying(true);
+    setMessage('继续游戏');
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
       <div className="container mx-auto py-8">
         <h1 className="text-4xl font-bold text-center text-white mb-2">
-          TriPeaks 求解器
+          TriPeaks 游戏
         </h1>
         <p className="text-center text-gray-400 mb-6">
-          右键点击卡牌标注花色和点数 | 点击"求解"自动求解游戏
+          点击卡牌移动到弃牌堆 | 点击库存翻牌 | 点击"求解"查看解法
         </p>
 
         {message && (
           <div
             className={`max-w-4xl mx-auto mb-4 p-3 rounded-lg text-center ${
-              message.startsWith('✓')
+              message.startsWith('✓') || message.includes('🎉')
                 ? 'bg-green-900 text-green-200'
-                : message.startsWith('✗')
+                : message.startsWith('✗') || message.includes('😞')
                 ? 'bg-red-900 text-red-200'
                 : 'bg-blue-900 text-blue-200'
             }`}
@@ -196,17 +271,21 @@ function App() {
 
         <Controls
           onNewGame={handleNewGame}
-          onSolve={handleSolve}
+          onSolve={isPlaying ? handleSolve : handleContinueSolve}
           onReset={handleReset}
           onExport={handleExport}
           onImport={handleImport}
+          isPlaying={isPlaying}
+          onResume={handleResume}
         />
 
         <Board
           pyramid={pyramid}
           stock={stock}
           waste={waste}
-          onCardLabelChange={handleCardLabelChange}
+          onCardClick={handleCardClick}
+          onStockClick={handleStockClick}
+          isPlaying={isPlaying}
         />
 
         <History

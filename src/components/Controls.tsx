@@ -6,7 +6,8 @@ interface ControlsProps {
   onReset: () => void;
   onExport: () => void;
   onImport: (jsonString: string) => void;
-  disabled?: boolean;
+  isPlaying: boolean;
+  onResume?: () => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({
@@ -15,7 +16,8 @@ const Controls: React.FC<ControlsProps> = ({
   onReset,
   onExport,
   onImport,
-  disabled = false,
+  isPlaying,
+  onResume,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,36 +45,39 @@ const Controls: React.FC<ControlsProps> = ({
     <div className="flex flex-wrap gap-4 justify-center p-4">
       <button
         onClick={onNewGame}
-        disabled={disabled}
-        className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-semibold transition-colors shadow-md"
+        className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors shadow-md"
       >
         新游戏
       </button>
       <button
         onClick={onSolve}
-        disabled={disabled}
-        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-semibold transition-colors shadow-md"
+        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors shadow-md"
       >
-        求解
+        {isPlaying ? '求解' : '继续求解'}
       </button>
+      {!isPlaying && onResume && (
+        <button
+          onClick={onResume}
+          className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors shadow-md"
+        >
+          继续游戏
+        </button>
+      )}
       <button
         onClick={onReset}
-        disabled={disabled}
-        className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white rounded-lg font-semibold transition-colors shadow-md"
+        className="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-semibold transition-colors shadow-md"
       >
         重置
       </button>
       <button
         onClick={onExport}
-        disabled={disabled}
-        className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white rounded-lg font-semibold transition-colors shadow-md"
+        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors shadow-md"
       >
         导出
       </button>
       <button
         onClick={handleImportClick}
-        disabled={disabled}
-        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 text-white rounded-lg font-semibold transition-colors shadow-md"
+        className="px-6 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-semibold transition-colors shadow-md"
       >
         导入
       </button>

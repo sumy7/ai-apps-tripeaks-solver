@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card as CardType, Suit, Rank } from '../types';
+import { Card as CardType } from '../types';
 import Card from './Card';
 import { getRankDisplay, getSuitSymbol, getSuitColor } from '../gameUtils';
 
@@ -7,16 +7,18 @@ interface BoardProps {
   pyramid: CardType[];
   stock: CardType[];
   waste: CardType | null;
-  onCardLabelChange: (cardId: string, suit: Suit, rank: Rank) => void;
-  disabled?: boolean;
+  onCardClick: (cardId: string) => void;
+  onStockClick: () => void;
+  isPlaying: boolean;
 }
 
 const Board: React.FC<BoardProps> = ({
   pyramid,
   stock,
   waste,
-  onCardLabelChange,
-  disabled = false,
+  onCardClick,
+  onStockClick,
+  isPlaying,
 }) => {
   // Group pyramid cards by row
   const pyramidByRow: CardType[][] = [[], [], [], []];
@@ -45,10 +47,8 @@ const Board: React.FC<BoardProps> = ({
               <Card
                 key={card.id}
                 card={card}
-                onLabelChange={(suit, rank) =>
-                  onCardLabelChange(card.id, suit, rank)
-                }
-                disabled={disabled}
+                onClick={() => onCardClick(card.id)}
+                isPlayable={isPlaying && !card.removed && !card.blocked}
               />
             ))}
           </div>
@@ -62,7 +62,12 @@ const Board: React.FC<BoardProps> = ({
           <div className="text-sm text-gray-400">库存 ({stock.length})</div>
           <div className="relative">
             {stock.length > 0 ? (
-              <div className="w-16 h-24 rounded-lg bg-blue-600 border-2 border-blue-700 flex items-center justify-center">
+              <div
+                onClick={onStockClick}
+                className={`w-16 h-24 rounded-lg bg-blue-600 border-2 border-blue-700 flex items-center justify-center ${
+                  isPlaying ? 'cursor-pointer hover:bg-blue-500' : 'opacity-50'
+                }`}
+              >
                 <div className="text-white font-bold">{stock.length}</div>
               </div>
             ) : (

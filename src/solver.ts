@@ -1,5 +1,5 @@
 import { Card, HistoryStep } from './types';
-import { canPlayCard, cloneCards, updateBlockedStatus } from './gameUtils';
+import { canPlayCard, cloneCards, updateBlockedStatus, getSuitSymbol, getRankDisplay } from './gameUtils';
 
 interface SolverResult {
   success: boolean;
@@ -44,24 +44,6 @@ export const solveGame = (
       (card) => !card.removed && !card.blocked
     );
 
-    // Check if any playable card has unknown rank
-    const unknownCard = playableCards.find((card) => card.rank === null);
-    if (unknownCard) {
-      history.push({
-        description: `遇到未标注的卡牌 (位置: 行${unknownCard.position.row}, 列${unknownCard.position.col})`,
-        gameState: {
-          pyramid: cloneCards(currentPyramid),
-          stock: [...currentStock],
-          waste: currentWaste ? { ...currentWaste } : null,
-        },
-      });
-      return {
-        success: false,
-        history,
-        reason: '遇到未标注的可移动卡牌，求解停止',
-      };
-    }
-
     // Try to play a card from the pyramid
     let cardPlayed = false;
     for (const card of playableCards) {
@@ -72,7 +54,7 @@ export const solveGame = (
         currentWaste = { ...card };
 
         history.push({
-          description: `从金字塔移除卡牌 ${card.id}`,
+          description: `从金字塔移除 ${getSuitSymbol(card.suit)}${getRankDisplay(card.rank)}`,
           gameState: {
             pyramid: cloneCards(currentPyramid),
             stock: [...currentStock],
@@ -92,29 +74,11 @@ export const solveGame = (
     // No pyramid card can be played, try to draw from stock
     if (currentStock.length > 0) {
       const drawnCard = currentStock[0];
-
-      // Check if the drawn card is labeled
-      if (drawnCard.rank === null) {
-        history.push({
-          description: `遇到未标注的库存卡牌`,
-          gameState: {
-            pyramid: cloneCards(currentPyramid),
-            stock: [...currentStock],
-            waste: currentWaste ? { ...currentWaste } : null,
-          },
-        });
-        return {
-          success: false,
-          history,
-          reason: '遇到未标注的库存卡牌，求解停止',
-        };
-      }
-
       currentStock = currentStock.slice(1);
       currentWaste = { ...drawnCard };
 
       history.push({
-        description: `从库存翻出卡牌 ${drawnCard.id}`,
+        description: `从库存翻出 ${getSuitSymbol(drawnCard.suit)}${getRankDisplay(drawnCard.rank)}`,
         gameState: {
           pyramid: cloneCards(currentPyramid),
           stock: [...currentStock],
