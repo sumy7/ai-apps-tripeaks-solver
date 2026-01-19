@@ -107,20 +107,17 @@ function App() {
     }
 
     const drawnCard = stock[0];
-    setStock(stock.slice(1));
+    const newStock = stock.slice(1);
+    setStock(newStock);
     setWaste({ ...drawnCard });
     setMessage('');
 
-    // Check if game is lost
-    const playableCards = pyramid.filter((c) => !c.removed && !c.blocked);
-    const canPlay = playableCards.some((c) => canPlayCard(c, drawnCard));
-    
-    if (!canPlay && stock.length === 1) {
-      // Check if this was the last card
+    // Check if game is lost after drawing the last card
+    if (newStock.length === 0) {
       setTimeout(() => {
-        const stillPlayable = pyramid.filter((c) => !c.removed && !c.blocked);
-        const stillCanPlay = stillPlayable.some((c) => canPlayCard(c, drawnCard));
-        if (!stillCanPlay && stock.length === 0) {
+        const playableCards = pyramid.filter((c) => !c.removed && !c.blocked);
+        const canPlay = playableCards.some((c) => canPlayCard(c, drawnCard));
+        if (!canPlay) {
           const remaining = pyramid.filter((c) => !c.removed);
           if (remaining.length > 0) {
             setMessage(`😞 游戏失败，剩余 ${remaining.length} 张卡牌`);

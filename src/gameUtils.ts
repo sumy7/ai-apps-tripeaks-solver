@@ -111,7 +111,7 @@ export const updateBlockedStatus = (pyramid: Card[]): void => {
 
 // Check if a card can be played on the waste pile
 export const canPlayCard = (card: Card, wasteCard: Card | null): boolean => {
-  if (!card.rank || !wasteCard || !wasteCard.rank) {
+  if (!wasteCard || card.rank === null || wasteCard.rank === null) {
     return false;
   }
 
